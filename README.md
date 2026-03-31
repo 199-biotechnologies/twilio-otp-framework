@@ -81,29 +81,35 @@ Most OTP implementations are dangerously incomplete:
 ```
 twilio-otp-framework/
 ├── src/
+│   ├── components/
+│   │   ├── PhoneInput.tsx        # International phone input with flags
+│   │   ├── OtpInput.tsx          # 6-digit code with paste + auto-advance
+│   │   ├── VerificationFlow.tsx  # Complete phone → OTP → verified flow
+│   │   ├── LoginWithPhone.tsx    # Dual-mode login box (Email / Phone)
+│   │   └── index.ts             # Barrel export
 │   ├── lib/
-│   │   ├── otp.ts              # Generation + HMAC-SHA256 hashing
-│   │   ├── sms.ts              # Twilio SMS (direct REST, no SDK)
-│   │   ├── voice.ts            # Voice call OTP fallback
-│   │   ├── whatsapp.ts         # WhatsApp OTP channel
-│   │   ├── twilio-verify.ts    # Twilio Verify API (managed alternative)
-│   │   ├── rate-limit.ts       # Multi-tier: Redis + in-memory + fail-closed
-│   │   ├── phone.ts            # E.164 normalization + validation
-│   │   ├── webhook.ts          # Twilio signature validation
-│   │   ├── session.ts          # DB-backed sessions + HTTP-only cookies
-│   │   ├── security.ts         # Timing guards, phone intelligence, geo-blocking
-│   │   └── audit.ts            # Fire-and-forget event logging
+│   │   ├── otp.ts               # Generation + HMAC-SHA256 hashing
+│   │   ├── sms.ts               # Twilio SMS (direct REST, no SDK)
+│   │   ├── voice.ts             # Voice call OTP fallback
+│   │   ├── whatsapp.ts          # WhatsApp OTP channel
+│   │   ├── twilio-verify.ts     # Twilio Verify API (managed alternative)
+│   │   ├── rate-limit.ts        # Multi-tier: Redis + in-memory + fail-closed
+│   │   ├── phone.ts             # E.164 normalization + validation
+│   │   ├── webhook.ts           # Twilio signature validation
+│   │   ├── session.ts           # DB-backed sessions + HTTP-only cookies
+│   │   ├── security.ts          # Timing guards, phone intelligence, geo-blocking
+│   │   └── audit.ts             # Fire-and-forget event logging
 │   ├── api/
-│   │   ├── send-otp/route.ts   # Send OTP endpoint
-│   │   ├── verify-otp/route.ts # Verify OTP endpoint
-│   │   ├── resend-otp/route.ts # Resend with channel escalation
-│   │   └── twilio-webhook/     # Delivery status callbacks
+│   │   ├── send-otp/route.ts    # Send OTP endpoint
+│   │   ├── verify-otp/route.ts  # Verify OTP endpoint
+│   │   ├── resend-otp/route.ts  # Resend with channel escalation
+│   │   └── twilio-webhook/      # Delivery status callbacks
 │   └── db/
-│       └── schema.sql          # Complete PostgreSQL schema
-├── docs/                       # 14 in-depth guides (see below)
-├── .env.example                # All env vars documented
-├── SECURITY.md                 # Vulnerability reporting
-└── LICENSE                     # MIT
+│       └── schema.sql           # Complete PostgreSQL schema
+├── docs/                        # 16 in-depth guides (see below)
+├── .env.example                 # All env vars documented
+├── SECURITY.md                  # Vulnerability reporting
+└── LICENSE                      # MIT
 ```
 
 ## Quick Start
@@ -173,12 +179,35 @@ This is a **reference framework**, not a runnable app or npm package. The librar
 - **Alpha Sender IDs** — branded SMS ("HEALTRIX" instead of a phone number)
 - **A2P 10DLC compliance** — US carrier registration guide
 
-### Frontend Components
+### Ready-to-Use UI Components (`src/components/`)
 
-- **Phone input** with country flags and E.164 output (`react-phone-number-input`)
-- **OTP input** — 6-digit with auto-advance, paste support, `autocomplete="one-time-code"`
-- **Resend timer** with channel escalation ("Call me instead" after 2 resends)
-- **Full verification flow** component with error handling
+Four React components you can drop into any Next.js project:
+
+| Component | What It Does |
+|-----------|-------------|
+| **`PhoneInput`** | International input with country flags, E.164 output, validation |
+| **`OtpInput`** | 6-digit code with auto-advance, paste support, `autocomplete="one-time-code"` for browser SMS auto-fill |
+| **`VerificationFlow`** | Complete phone → send code → enter code → verified. Resend timer, channel escalation, "Call me instead" |
+| **`LoginWithPhone`** | Dual-mode login box (Email magic link / Phone OTP) with tab switcher. Plug in your endpoints and go. |
+
+```tsx
+// One component, entire verification flow
+<VerificationFlow
+  onVerified={(phone) => router.push("/dashboard")}
+  defaultCountry="GB"
+  appName="Healtrix"
+/>
+
+// Or the full login box with email + phone tabs
+<LoginWithPhone
+  onAuthenticated={(result) => handleLogin(result)}
+  modes={["phone", "email"]}
+  brandName="Sign in to Healtrix"
+  brandLogo="/logo.svg"
+/>
+```
+
+All components use Tailwind CSS classes. Swap the classes for your design system.
 
 ## Documentation
 
