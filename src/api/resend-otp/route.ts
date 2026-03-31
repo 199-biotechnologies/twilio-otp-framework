@@ -53,11 +53,13 @@ function resolveChannel(
 
 export async function POST(request: Request) {
   try {
-    const { phone, resendCount = 0, preferredChannel } = (await request.json()) as {
-      phone?: string;
-      resendCount?: number;
-      preferredChannel?: string;
-    };
+    let body: { phone?: string; preferredChannel?: string };
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { phone, preferredChannel } = body;
 
     if (!phone) {
       return NextResponse.json(
@@ -76,14 +78,30 @@ export async function POST(request: Request) {
 
     const ip = getClientIp(request.headers);
 
-    // ── Rate limit resends more strictly ──
-    const limit = await rateLimit(
+    // ── Require an active OTP before allowing resend ──
+    // Without this check, the resend endpoint is a free SMS/Voice sender.
+    // Uncomment and adapt to your ORM:
+    //
+    // const [activeOtp] = await sql`
+    //   SELECT 1 FROM sms_otps
+    //   WHERE phone = ${normalizedPhone} AND expires_at > NOW()
+    //   LIMIT 1
+    // `;
+    // if (!activeOtp) {
+    //   return NextResponse.json(
+    //     { error: "No active verification. Please start a new one." },
+    //     { status: 400 }
+    //   );
+    // }
+
+    // ── Rate limit resends strictly (per-phone + per-IP) ──
+    const phoneLimit = await rateLimit(
       `otp:resend:${normalizedPhone}`,
       { limit: 5, windowSeconds: 1800 }, // 5 resends per phone per 30 min
       { authSensitive: true }
     );
 
-    if (!limit.success) {
+    if (!phoneLimit.success) {
       await auditOtpRateLimited(maskPhone(normalizedPhone), ip, "resend");
       return NextResponse.json(
         { error: "Too many resend attempts. Please wait before trying again." },
@@ -91,8 +109,32 @@ export async function POST(request: Request) {
       );
     }
 
-    // ── Resolve channel ──
-    const channel = resolveChannel(resendCount, preferredChannel);
+    const ipLimit = await rateLimit(
+      `otp:resend:ip:${ip}`,
+      { limit: 10, windowSeconds: 1800 }, // 10 resends per IP per 30 min
+      { authSensitive: true }
+    );
+
+    if (!ipLimit.success) {
+      await auditOtpRateLimited(maskPhone(normalizedPhone), ip, "resend_ip");
+      return NextResponse.json(
+        { error: "Too many resend attempts. Please wait before trying again." },
+        { status: 429 }
+      );
+    }
+
+    // ── Derive resend count server-side (never trust client) ──
+    // Count how many OTPs were sent to this phone recently:
+    // const [{ count }] = await sql`
+    //   SELECT count(*)::int FROM audit_events
+    //   WHERE event = 'otp.requested' AND phone = ${maskPhone(normalizedPhone)}
+    //     AND created_at > NOW() - INTERVAL '30 minutes'
+    // `;
+    // const serverResendCount = count ?? 0;
+    const serverResendCount = 0; // Replace with DB query above
+
+    // ── Resolve channel (server-side count prevents forced voice calls) ──
+    const channel = resolveChannel(serverResendCount, preferredChannel);
     await auditOtpRequested(maskPhone(normalizedPhone), ip, `resend:${channel}`);
 
     // ── Invalidate existing OTPs ──

@@ -204,7 +204,10 @@ export function shouldBlockPhone(
     return { blocked: true, reason: "Invalid phone number" };
   }
 
-  if (!allowVoip && lookup.lineType === "voip") {
+  // Twilio Lookup v2 returns granular VoIP types:
+  // "fixedVoip" (office phones), "nonFixedVoip" (burner phones like Google Voice)
+  const voipTypes = ["voip", "fixedVoip", "nonFixedVoip"];
+  if (!allowVoip && voipTypes.includes(lookup.lineType || "")) {
     return { blocked: true, reason: "VoIP numbers not allowed" };
   }
 

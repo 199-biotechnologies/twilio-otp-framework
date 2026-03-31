@@ -139,11 +139,18 @@ await createSession(user.id); // If this throws, OTP is already gone
 
 OTPs must be consumed exactly once. The atomic DELETE pattern ensures this:
 
+Use a two-step pattern: SELECT to get the hash, then DELETE after verification:
+
 ```sql
--- This is both the lookup AND the consumption in one atomic step
-DELETE FROM sms_otps
+-- Step 1: Fetch (don't delete yet — code hasn't been verified)
+SELECT id, otp_hash, attempts FROM sms_otps
 WHERE phone = $1 AND expires_at > NOW()
-RETURNING id, otp_hash, attempts;
+ORDER BY created_at DESC LIMIT 1;
+
+-- Step 2: After hash comparison succeeds, consume atomically
+DELETE FROM sms_otps WHERE id = $1 RETURNING id;
 ```
 
-If two requests arrive simultaneously with the same code, only one will get the RETURNING result. The other gets zero rows.
+The DELETE in step 2 ensures single-use. If two requests verify simultaneously, only one gets the RETURNING result. The other gets zero rows.
+
+**Never DELETE before verifying the code.** A DELETE-then-check pattern would consume valid OTPs before knowing if the submitted code is correct.

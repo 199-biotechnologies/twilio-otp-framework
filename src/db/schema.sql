@@ -19,10 +19,15 @@ CREATE TABLE IF NOT EXISTS sms_otps (
   created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Fast lookup by phone (most common query)
-CREATE INDEX idx_sms_otps_phone ON sms_otps (phone);
+-- Composite index for the most common query: find active OTP by phone
+CREATE INDEX idx_sms_otps_phone_active ON sms_otps (phone, expires_at DESC);
 -- Cleanup: find expired OTPs for periodic purging
 CREATE INDEX idx_sms_otps_expires ON sms_otps (expires_at);
+-- Enforce valid values
+ALTER TABLE sms_otps ADD CONSTRAINT chk_channel
+  CHECK (channel IN ('sms', 'voice', 'whatsapp'));
+ALTER TABLE sms_otps ADD CONSTRAINT chk_attempts
+  CHECK (attempts >= 0 AND attempts <= 10);
 
 
 -- ── Phone Verification Claims ───────────────────────────────
@@ -57,8 +62,8 @@ CREATE INDEX idx_pvc_phone ON phone_verification_claims (phone);
 
 CREATE TABLE IF NOT EXISTS users (
   id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email                   VARCHAR(255) UNIQUE,
-  phone                   VARCHAR(20) UNIQUE,  -- E.164 format
+  email                   VARCHAR(255),         -- Uniqueness via partial index below
+  phone                   VARCHAR(20),           -- E.164 format; uniqueness via partial index
   phone_verified_at       TIMESTAMPTZ,         -- When phone was last verified
   email_verified          BOOLEAN DEFAULT false,
   last_login              TIMESTAMPTZ,

@@ -59,22 +59,32 @@ export function validateTwilioSignature(
 }
 
 /**
- * Express/Next.js middleware helper for webhook validation.
+ * Validate a Twilio webhook and return the parsed parameters.
+ *
+ * Returns the params so the caller doesn't need to re-read the body
+ * (Request.formData() can only be consumed once).
+ *
+ * IMPORTANT: Behind a reverse proxy or custom domain, `request.url`
+ * may not match the public URL Twilio signed. Set TWILIO_WEBHOOK_URL
+ * in your environment to the exact public URL you configured in Twilio.
  *
  * Usage in Next.js App Router:
  * ```ts
  * export async function POST(request: Request) {
- *   const isValid = await validateWebhookRequest(request);
- *   if (!isValid) {
+ *   const result = await validateAndParseWebhook(request);
+ *   if (!result) {
  *     return new Response("Forbidden", { status: 403 });
  *   }
- *   // Process the webhook...
+ *   const { params } = result;
+ *   // Process params.MessageStatus, params.MessageSid, etc.
  * }
  * ```
  */
-export async function validateWebhookRequest(request: Request): Promise<boolean> {
+export async function validateAndParseWebhook(
+  request: Request
+): Promise<{ params: Record<string, string> } | null> {
   const signature = request.headers.get("x-twilio-signature");
-  if (!signature) return false;
+  if (!signature) return null;
 
   const formData = await request.formData();
   const params: Record<string, string> = {};
@@ -82,8 +92,10 @@ export async function validateWebhookRequest(request: Request): Promise<boolean>
     params[key] = String(value);
   });
 
-  // The URL must match exactly what Twilio was configured to call
-  const url = request.url;
+  // Use configured public URL (Twilio signs the exact URL it calls),
+  // falling back to request.url for simple deployments
+  const url = process.env.TWILIO_WEBHOOK_URL || request.url;
 
-  return validateTwilioSignature(url, params, signature);
+  const isValid = validateTwilioSignature(url, params, signature);
+  return isValid ? { params } : null;
 }

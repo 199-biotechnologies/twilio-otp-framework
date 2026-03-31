@@ -15,7 +15,8 @@ if (!OTP_HMAC_SECRET) {
 /** Generate a cryptographically random 6-digit OTP */
 export function generateOtp(): string {
   // crypto.randomInt is CSPRNG — do NOT use Math.random()
-  return crypto.randomInt(100_000, 999_999).toString();
+  // Upper bound is exclusive, so use 1_000_000 to include 999999
+  return crypto.randomInt(100_000, 1_000_000).toString();
 }
 
 /**

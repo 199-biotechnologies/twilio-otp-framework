@@ -37,10 +37,14 @@ export async function POST(request: Request) {
   const timer = startTimingGuard(300);
 
   try {
-    const { phone, otp } = (await request.json()) as {
-      phone?: string;
-      otp?: string;
-    };
+    let body: { phone?: string; otp?: string };
+    try {
+      body = await request.json();
+    } catch {
+      await timer.wait();
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { phone, otp } = body;
 
     // ── Validate input ──
     if (!phone || !otp) {
@@ -106,9 +110,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // ── Brute force protection ──
+    // ── Brute force protection (check before verification) ──
     if (record.attempts >= MAX_ATTEMPTS) {
-      // Delete the OTP — user must request a new one
+      // Already locked out — delete the OTP, force new code request
       // await sql`DELETE FROM sms_otps WHERE id = ${record.id}`;
       await auditOtpLockedOut(maskPhone(normalizedPhone), ip);
       await timer.wait();
@@ -122,15 +126,27 @@ export async function POST(request: Request) {
     const isValid = verifyOtp(otp.trim(), record.otp_hash);
 
     if (!isValid) {
-      // Increment attempt counter
+      // Increment attempt counter THEN check if this was the last attempt
+      const newAttempts = record.attempts + 1;
       // await sql`UPDATE sms_otps SET attempts = attempts + 1 WHERE id = ${record.id}`;
-      const remaining = MAX_ATTEMPTS - record.attempts - 1;
-      await auditOtpFailed(maskPhone(normalizedPhone), ip, record.attempts + 1);
+
+      if (newAttempts >= MAX_ATTEMPTS) {
+        // This was the final attempt — invalidate immediately
+        // await sql`DELETE FROM sms_otps WHERE id = ${record.id}`;
+        await auditOtpLockedOut(maskPhone(normalizedPhone), ip);
+        await timer.wait();
+        return NextResponse.json(
+          { error: "Too many incorrect attempts. Please request a new code." },
+          { status: 429 }
+        );
+      }
+
+      await auditOtpFailed(maskPhone(normalizedPhone), ip, newAttempts);
       await timer.wait();
       return NextResponse.json(
         {
           error: "Incorrect code. Please try again.",
-          attemptsRemaining: remaining,
+          attemptsRemaining: MAX_ATTEMPTS - newAttempts,
         },
         { status: 400 }
       );

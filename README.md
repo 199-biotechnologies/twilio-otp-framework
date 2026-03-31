@@ -122,9 +122,10 @@ cp src/lib/sms.ts your-project/lib/
 cp src/lib/rate-limit.ts your-project/lib/
 cp src/lib/phone.ts your-project/lib/
 
-# Copy the API routes
-cp -r src/api/send-otp your-project/app/api/otp/
-cp -r src/api/verify-otp your-project/app/api/otp/
+# Copy the API routes (rename directories to match your routing)
+cp src/api/send-otp/route.ts your-project/app/api/otp/send/route.ts
+cp src/api/verify-otp/route.ts your-project/app/api/otp/verify/route.ts
+cp src/api/resend-otp/route.ts your-project/app/api/otp/resend/route.ts
 ```
 
 **3. Set up your database**
@@ -138,7 +139,7 @@ cp .env.example .env.local
 # Fill in your Twilio credentials, OTP_HMAC_SECRET, and database URL
 ```
 
-This is a **reference framework**, not an npm package. Copy what you need, adapt the DB queries to your ORM (Drizzle, Prisma, raw SQL), and wire it into your auth flow.
+This is a **reference framework**, not a runnable app or npm package. The library code is copy-paste ready, but SQL queries are commented out with `// await sql` — you need to adapt them to your ORM (Drizzle, Prisma, raw SQL). The patterns, security decisions, and architecture are production-tested; the wiring is yours to do.
 
 ## Features
 
@@ -199,6 +200,8 @@ Every doc is self-contained with code snippets you can copy directly:
 | 12 | [Monitoring & Audit](docs/12-monitoring-audit.md) | Event logging, conversion tracking, alerting |
 | 13 | [Launch Checklist](docs/13-launch-checklist.md) | Pre-production security review |
 | 14 | [Integrations](docs/14-integrations.md) | Supabase Auth, NextAuth, better-auth, Stripe |
+| 15 | [Testing](docs/15-testing.md) | Test credentials, mocking, webhook fixtures, E2E |
+| 16 | [Privacy & Compliance](docs/16-privacy-compliance.md) | GDPR, data retention, encryption, Twilio as processor |
 
 ## Custom OTP vs Twilio Verify
 

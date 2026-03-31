@@ -49,10 +49,18 @@ export async function createSession(
     Date.now() + SESSION_DURATION_DAYS * 24 * 60 * 60 * 1000
   );
 
-  // ── Store in database (adapt to your ORM) ──
+  // ── Store a HASH of the token in the database ──
+  // The raw token goes in the cookie; only the hash is stored server-side.
+  // If the database is compromised, attackers can't use the hashed values
+  // to forge session cookies.
+  const hashedSessionId = crypto
+    .createHash("sha256")
+    .update(sessionId)
+    .digest("hex");
+
   // await sql`
   //   INSERT INTO sessions (id, user_id, expires_at, ip, user_agent, created_at)
-  //   VALUES (${sessionId}, ${userId}, ${expiresAt.toISOString()},
+  //   VALUES (${hashedSessionId}, ${userId}, ${expiresAt.toISOString()},
   //           ${metadata?.ip}, ${metadata?.userAgent}, NOW())
   // `;
 

@@ -22,8 +22,12 @@ export interface SmsResult {
  *
  * Why REST instead of the SDK?
  * - Zero dependencies (no twilio package — saves ~5MB in serverless)
- * - Works in edge runtimes (Vercel Edge, Cloudflare Workers)
  * - Full control over error handling and retries
+ *
+ * NOTE: This file uses Node.js `Buffer` for base64 encoding. For true
+ * edge runtime compatibility (Vercel Edge, Cloudflare Workers), replace
+ * `Buffer.from(...).toString("base64")` with `btoa(...)`.
+ * The rest of the code uses only the Fetch API.
  *
  * Why Messaging Service SID over a From number?
  * - Automatic number pool management

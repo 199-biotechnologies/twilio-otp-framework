@@ -38,10 +38,14 @@ export async function POST(request: Request) {
   const timer = startTimingGuard(500);
 
   try {
-    const { phone, channel = "sms" } = (await request.json()) as {
-      phone?: string;
-      channel?: Channel;
-    };
+    let body: { phone?: string; channel?: Channel };
+    try {
+      body = await request.json();
+    } catch {
+      await timer.wait();
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    const { phone, channel = "sms" } = body;
 
     // ── 1. Validate phone ──
     if (!phone) {

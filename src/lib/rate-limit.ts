@@ -82,9 +82,22 @@ async function redisRateLimit(
 
     redisAvailable = true;
 
-    if (currentCount >= config.limit) {
-      // Over limit — remove the member we just speculatively added
-      // (or let it expire naturally — low impact)
+    // NOTE: This pipeline adds the member before checking the count,
+    // which means the ZCARD reflects the state AFTER insertion.
+    // The +1 accounts for the member we just added.
+    const countAfterAdd = (results[1]?.result ?? 0) + 1;
+
+    if (countAfterAdd > config.limit) {
+      // Over limit — remove the member we speculatively added
+      await fetch(`${restUrl}`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${restToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(["ZREM", key, member]),
+      }).catch(() => {}); // Best-effort cleanup
+
       return {
         success: false,
         remaining: 0,
@@ -94,7 +107,7 @@ async function redisRateLimit(
 
     return {
       success: true,
-      remaining: config.limit - currentCount - 1,
+      remaining: config.limit - countAfterAdd,
       resetMs: config.windowSeconds * 1000,
     };
   } catch (err) {
@@ -180,10 +193,18 @@ export async function rateLimit(
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-/** Extract client IP from request headers (works with Vercel, Cloudflare, nginx) */
+/**
+ * Extract client IP from request headers.
+ *
+ * IMPORTANT: x-forwarded-for and x-real-ip are only trustworthy if your
+ * reverse proxy (Vercel, Cloudflare, nginx) overwrites them. On bare
+ * servers without a trusted proxy, clients can spoof these headers to
+ * bypass IP-based rate limits. Use cf-connecting-ip (Cloudflare) or
+ * Vercel's built-in IP when available — these are set by the platform.
+ */
 export function getClientIp(headers: Headers): string {
   return (
-    // Cloudflare
+    // Cloudflare (set by platform, not spoofable)
     headers.get("cf-connecting-ip") ||
     // Vercel / standard proxy
     headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
